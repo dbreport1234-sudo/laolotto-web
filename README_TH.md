@@ -1,0 +1,41 @@
+# Lao Lotto Pro (Web) — วิธีขึ้นเว็บให้ใช้บนมือถือ
+
+โครงสร้าง: `streamlit_app.py` (หน้าเว็บ) • `formula_engine.py` (276 สูตร + backtest) • `data/lao_lottery_full.csv` (ผลจริง 893 งวด)
+• `scripts/` (ดึงผลใหม่ + สร้างคำทายล่วงหน้า) • `.github/workflows/update.yml` (ตั้งเวลาอัตโนมัติ)
+
+## 0) ลองในเครื่องก่อน (ไม่บังคับ)
+```
+pip install -r requirements.txt
+streamlit run streamlit_app.py
+```
+
+## 1) ขึ้น GitHub (ครั้งเดียว)
+1. สมัคร github.com → มุมขวาบน **+ → New repository** → ชื่อ `laolotto-web` → เลือก **Private** → Create
+2. แตก zip นี้ แล้วในหน้า repo กด **uploading an existing file** → ลากไฟล์/โฟลเดอร์ทั้งหมดใส่ → Commit changes
+3. ถ้า `.github` (โฟลเดอร์ที่ขึ้นต้นด้วยจุด) ไม่ติดมา: **Add file → Create new file** → ตั้งชื่อ `.github/workflows/update.yml`
+   (พิมพ์ `/` เพื่อสร้างโฟลเดอร์) → คัดลอกเนื้อหาจากไฟล์ใน zip มาวาง → Commit
+4. **Settings → Actions → General → Workflow permissions → Read and write permissions → Save**
+5. แท็บ **Actions → update-data-and-predictions → Run workflow** (ทดสอบครั้งแรก)
+   เปิดดู log: ต้องเห็นบรรทัด "อ่านจากเว็บ ... แถว" — ถ้าเป็น 0 หรือ error ให้คัดลอก log ไปให้ผู้ช่วยแก้
+
+## 2) ขึ้นเว็บด้วย Streamlit Community Cloud (ฟรี)
+1. เข้า share.streamlit.io → **Continue with GitHub** (อนุญาตให้เข้าถึง repo private)
+2. **Create app → Deploy a public app from GitHub** → เลือก repo `laolotto-web` / branch `main` / Main file `streamlit_app.py`
+3. **Advanced settings** → Python 3.11 → ช่อง Secrets ใส่ `APP_PASSWORD = "รหัสที่คุณตั้ง"` → Deploy
+4. รอ 2-3 นาที จะได้ลิงก์ `https://ชื่อ.streamlit.app` — ค่าเริ่มต้นใครมีลิงก์ก็เปิดได้ จึงควรตั้งรหัสผ่านตามข้อ 3
+   และ/หรือ App → Settings → Sharing → จำกัดเฉพาะอีเมลที่เชิญ
+
+## 3) ใช้บนมือถือ
+เปิดลิงก์ใน Chrome/Safari → เมนูแชร์/จุดสามจุด → **เพิ่มลงหน้าจอหลัก** จะเปิดเต็มจอเหมือนแอพ
+
+## ระบบทำงานเองอย่างไร
+- จันทร์-ศุกร์ 08:00 (ไทย): สร้างคำทายของงวดวันนี้ก่อนผลออก • 21:30 และ 23:30: ดึงผลใหม่ แล้วสร้างคำทายงวดถัดไป
+- คำทายเก็บใน `data/predictions/วันที่.json.gz` ไม่เขียนทับ และ **ไม่สร้างหลัง 19:00 ของวันที่ออกรางวัล**
+  เวลา commit บน GitHub = หลักฐานว่าทายก่อนผลออก → แท็บ "📈 ติดตามผลจริง" เทียบผลให้เอง
+- ข้อมูลใหม่ผ่านด่านตรวจ (เลขสอดคล้องกัน / ไม่ซ้ำงวดอื่น / ไม่เขียนทับของเดิม) ความขัดแย้งบันทึกที่ `data/import_conflicts.csv`
+- ไฟล์ `data/predictions/2026-10-23.json.gz` ในชุดนี้สร้างไว้ก่อนผลงวด 23 ต.ค. ออก เป็นคำทายชุดแรกสำหรับติดตาม
+
+## ข้อควรรู้
+- แอพ Streamlit ฟรีจะ "หลับ" ถ้าไม่มีคนเข้านาน กดปุ่ม Wake up ได้
+- เวลา cron ของ GitHub อาจเลื่อนได้หลายนาที ถ้า Actions หยุดเอง ให้เข้าแท็บ Actions แล้วกด enable
+- ตั้ง repo เป็น Private และมีรหัสผ่านไว้ก่อน ผลวิเคราะห์เป็นสถิติเพื่อการศึกษา ไม่ใช่คำแนะนำการเล่น

@@ -43,11 +43,25 @@ def clean_draws(df):
     return d, rep
 
 def legacy_csv_to_df(path):
-    """อ่าน CSV รูปแบบเก่าที่ส่งออกจากแอพ (prize6/top3/top2) -> DataFrame มาตรฐาน"""
-    x = pd.read_csv(path, dtype=str)
-    if "country" in x: x = x[x.country == "LA"]
-    if "prize6" in x: x = x.rename(columns={"prize6": "digit_6"})
-    return x[[c for c in ("draw_date", "digit_6", "top3", "top2", "bottom2") if c in x]]
+  """อ่าน CSV รูปแบบมาตรฐานของระบบ -> DataFrame"""
+  x = pd.read_csv(path, dtype=str)
+  if "country" in x:
+    x = x[x.country == "LA"]
+  if "prize6" in x:
+    x = x.rename(columns={"prize6": "digit_6"})
+  if "number6" in x:
+    x = x.rename(columns={"number6": "digit_6"})
+  if "number3_top" in x:
+    x = x.rename(columns={"number3_top": "top3"})
+  if "number2_top" in x:
+    x = x.rename(columns={"number2_top": "top2"})
+  if "number2_bottom" in x:
+    x = x.rename(columns={"number2_bottom": "bottom2"})
+  return x[[
+      c
+      for c in ("draw_date", "digit_6", "top3", "top2", "bottom2")
+      if c in x
+  ]]
 
 GROUP_NAMES = {
     "A": "A ความถี่ร้อน/เย็น/ค้างนาน", "B": "B ซ้ำย้อนหลัง (Lag)", "C": "C บวก-ลบ-คูณ-เฉลี่ย",
@@ -225,6 +239,52 @@ def _(H2, H3, D, nd):
     if not s: return []
     d = str(sum(map(int, s)) % 10)
     return uniq([d + str(j) for j in range(10)] + [str(j) + d for j in range(10)])
+
+# --- สูตรชุดใหม่: เจาะลึกผลต่างและค่าพิกัดข้ามหลัก (New Wave Formulas) ---
+@J("J31-ผลต่างหลักสิบและหน่วยงวดก่อน คูณ 2")
+def _(H2, H3, D, nd):
+  if not H2:
+    return []
+  a, b = int(H2[-1][0]), int(H2[-1][1])
+  d = abs(a - b) * 2
+  res = (a + d) % 10
+  return [f"{res}{b}", f"{a}{res}"]
+
+
+@J("J32-ผลรวม 6 ตัวประกบคู่สลับฟันปลา")
+def _(H2, H3, D, nd):
+  s = _last6(H2)
+  if not s:
+    return []
+  s_sum = str(sum(map(int, s)) % 10)
+  return [f"{s_sum}{s[-1]}", f"{s[-2]}{s_sum}"]
+
+
+@J("J33-ค่าเฉลี่ย 3 งวดล่าสุด (ปัดเศษชนหลักหน่วย)")
+def _(H2, H3, D, nd):
+  if len(H2) < 3:
+    return []
+  avg = round(sum(int(x) for x in H2[-3:]) / 3)
+  av_s = f"{avg:02d}"
+  return [av_s, rev(av_s)]
+
+
+@J("J34-ผลต่างงวดล่าสุดกับงวดก่อนหน้า (Cross Delta)")
+def _(H2, H3, D, nd):
+  if len(H2) < 2:
+    return []
+  diff = abs(int(H2[-1]) - int(H2[-2]))
+  diff_s = f"{diff % 100:02d}"
+  return [diff_s, rev(diff_s)]
+
+
+@J("J35-เลขชนยอดฮิตตามวันออกรางวัล (Day Momentum)")
+def _(H2, D, nd, k=5):
+  # ดึงสถิติเฉพาะวันออกรางวัลเดียวกันในอดีต
+  pairs = [h for h, d_w in zip(H2, D) if d_w == nd]
+  if not pairs:
+    return topk_counter(Counter(H2[-30:]), 3)
+  return topk_counter(Counter(pairs), 3)
 
 @J("J02-บวกเลข จับคู่กับหลักท้ายผล (4 ตัว)")
 def _(H2, H3, D, nd):

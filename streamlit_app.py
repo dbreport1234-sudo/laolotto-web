@@ -77,7 +77,7 @@ st.sidebar.warning("เพื่อการศึกษาสถิติเท
 top, bot = run_analysis(data_key, n_test, win, K, N2, N3)
 RES = {"top2": (top, 2), "top3": (top, 3), "bottom2": (bot, 2)}
 
-tabs = st.tabs(["🏠 ภาพรวม", "🧪 สูตร & ชุดลอจิก", "🏆 ชุดเด่น", "📈 ติดตามผลจริง", "💰 แผนตามเลข", "ℹ️ วิธีอ่านผล"])
+tabs = st.tabs(["🏠 ภาพรวม", "🧪 สูตร & ชุดลอจิก", "🏆 ชุดเด่น", "📈 ติดตามผลจริง", "🔎 ความถี่เลข", "💰 แผนตามเลข", "ℹ️ วิธีอ่านผล"])
 
 
 # ----------------------------------------------------------------- ภาพรวม
@@ -195,8 +195,58 @@ with tabs[3]:
                          hide_index=True, width="stretch", height=480)
 
 
-# ----------------------------------------------------------------- แผนตามเลข
+# ----------------------------------------------------------------- ความถี่เลข + สถิติรายช่วง
 with tabs[4]:
+    st.subheader("ความถี่ผลจริงย้อนหลัง")
+    st.caption("ส่วนนี้เป็นสถิติย้อนหลัง ไม่ใช่การรับประกันว่าเลขที่ออกบ่อยจะออกซ้ำในงวดหน้า")
+    target_lab = st.radio("วิเคราะห์ผลจริง", ["2 ตัวบน", "2 ตัวล่าง", "3 ตัวบน"], horizontal=True, key="freq_target")
+    target_col = {"2 ตัวบน": "t2", "2 ตัวล่าง": "b2", "3 ตัวบน": "t3"}[target_lab]
+    freq_series = clean[target_col].astype(str)
+    freq_series = freq_series[freq_series.str.fullmatch(r"\d{2}" if target_col != "t3" else r"\d{3}")]
+    max_window = max(1, min(500, len(freq_series)))
+    default_window = min(100, max_window)
+    window = st.slider("จำนวนงวดที่ใช้คำนวณ", 10, max(10, max_window), max(10, default_window), 10, key="freq_window")
+    recent = freq_series.tail(window)
+    total_space = 100 if target_col != "t3" else 1000
+    all_nums = [f"{i:02d}" if total_space == 100 else f"{i:03d}" for i in range(total_space)]
+    counts = recent.value_counts()
+    freq_table = pd.DataFrame({"เลข": all_nums})
+    freq_table["ออก"] = freq_table["เลข"].map(counts).fillna(0).astype(int)
+    freq_table["ความถี่ %"] = (100 * freq_table["ออก"] / max(1, len(recent))).round(2)
+    freq_table["ไม่ออกติด (นับจากงวดล่าสุด)"] = freq_table["เลข"].map(
+        {n: (len(recent) - 1 - max([i for i, x in enumerate(recent.tolist()) if x == n], default=-1))
+         for n in all_nums}
+    ).fillna(len(recent)).astype(int)
+    hot, cold = st.columns(2)
+    with hot:
+        st.markdown("**เลขออกบ่อยสุดในช่วงที่เลือก**")
+        st.dataframe(freq_table.sort_values(["ออก", "เลข"], ascending=[False, True]).head(20),
+                     hide_index=True, width="stretch")
+    with cold:
+        st.markdown("**เลขออกน้อยสุดในช่วงที่เลือก**")
+        st.dataframe(freq_table.sort_values(["ออก", "เลข"], ascending=[True, True]).head(20),
+                     hide_index=True, width="stretch")
+    st.markdown("**ความถี่รายหลัก**")
+    digit_rows = []
+    for pos in range(len(recent.iloc[0]) if len(recent) else (3 if target_col == "t3" else 2)):
+        dc = recent.str[pos].value_counts()
+        for digit in map(str, range(10)):
+            digit_rows.append({"ตำแหน่ง": ["หลักร้อย", "หลักสิบ", "หลักหน่วย"][pos] if target_col == "t3" else ["หลักสิบ", "หลักหน่วย"][pos],
+                               "เลข": digit, "ออก": int(dc.get(digit, 0)),
+                               "ความถี่ %": round(100 * dc.get(digit, 0) / max(1, len(recent)), 2)})
+    digit_df = pd.DataFrame(digit_rows)
+    st.dataframe(digit_df, hide_index=True, width="stretch")
+    st.markdown("**ผลรวมความถี่ทั้งชุด**")
+    st.bar_chart(freq_table.sort_values("เลข").set_index("เลข")["ออก"], height=220)
+    st.info(
+        f"ช่วงนี้มีผลจริง {len(recent):,} งวด จากพื้นที่เลข {total_space:,} ค่า "
+        f"ค่าเฉลี่ยเชิงสุ่มประมาณ {len(recent)/total_space:.2f} ครั้งต่อเลข "
+        "ความต่างระหว่างเลขมักเกิดขึ้นได้เองจากความผันผวนของตัวอย่าง และเลขที่ค้างนานไม่ได้แปลว่าจะถึงคิว"
+    )
+
+
+# ----------------------------------------------------------------- แผนตามเลข
+with tabs[5]:
     st.caption("คำนวณว่า 'ตามเลขเดิมไม่เกิน R งวด' เสี่ยง/คุ้มแค่ไหน — ผลแต่ละงวดเป็นอิสระ การพลาดมาแล้วไม่ทำให้งวดหน้าถูกง่ายขึ้น")
     c = st.columns(6)
     kind_lab = c[0].selectbox("ชนิด", ["2 ตัว", "3 ตัว"]); kind = 2 if kind_lab == "2 ตัว" else 3
@@ -229,7 +279,7 @@ with tabs[4]:
 
 
 # ----------------------------------------------------------------- วิธีอ่านผล
-with tabs[5]:
+with tabs[6]:
     st.markdown("""
 **ระบบทำอะไร** — ทดสอบสูตรกว่า 270 สูตรกับผลจริงทีละงวดโดย *ไม่แอบดูอนาคต* (แต่ละงวดใช้เฉพาะข้อมูลก่อนหน้า) แล้วเทียบกับค่าที่การสุ่มล้วนจะได้
 
